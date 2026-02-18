@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<link rel="manifest" href="manifest.json">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#d32f2f">
+<title>VELITEĽ: Hazmat</title>
+<style>
+    :root { --primary: #d32f2f; --dark: #222; --light: #f4f4f4; --blue: #007bff; --green: #28a745; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; background: var(--light); margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; user-select: none; }
+    
+    .tabs { display: flex; background: var(--dark); color: white; height: 60px; flex-shrink: 0; z-index: 100; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+    .tab { flex: 1; text-align: center; line-height: 60px; cursor: pointer; border-bottom: 5px solid transparent; font-weight: bold; font-size: 16px; text-transform: uppercase; }
+    .tab.active { border-bottom-color: var(--primary); background: #333; }
+    
+    .sys-status { position: absolute; top: 20px; right: 15px; width: 12px; height: 12px; border-radius: 50%; background: gray; z-index: 200; border: 2px solid white; }
+    .sys-running { background: #00ff00; box-shadow: 0 0 8px #00ff00; animation: pulseDot 1s infinite; }
+    @keyframes pulseDot { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+    .tab-content { display: none; flex: 1; overflow-y: auto; padding-bottom: 80px; }
+    .tab-content.active { display: block; }
+
+    .setup-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 5000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .btn-big { width: 100%; padding: 15px; font-size: 18px; font-weight: bold; color: white; border: none; border-radius: 6px; cursor: pointer; margin-top: 10px; }
+    .btn-green { background: var(--green); }
+    .chk-line { display: flex; align-items: center; background: #eee; padding: 10px; margin-bottom: 5px; border-radius: 5px; }
+    .chk-line input { width: 25px; height: 25px; margin-right: 10px; }
+
+    .table-wrapper { width: 100%; height: 100%; overflow: auto; padding: 10px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; }
+    #mapScaleWrapper { transform-origin: top center; width: 100%; max-width: 600px; min-height: 800px; position: relative; transition: transform 0.2s; padding-bottom: 60px; margin-top: 20px; }
+    
+    /* ZÓNY */
+    .zone-cold-container { position: relative; width: 100%; height: 100%; background: rgba(200, 230, 201, 0.4); border: 4px solid #2e7d32; border-radius: 30px; box-sizing: border-box; overflow: hidden; }
+    .zone-label-cold { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); font-weight: bold; font-size: 18px; color: #1b5e20; background: rgba(255,255,255,0.8); padding: 5px 15px; border-radius: 20px; z-index: 5; border: 2px solid #2e7d32; }
+    
+    .base-station { background: #e3f2fd; border: 2px dashed #007bff; padding: 8px; text-align: center; border-radius: 5px; cursor: pointer; width: 180px; position: absolute; top: 15px; left: 15px; z-index: 10; box-shadow: 0 4px 6px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; color: #0056b3; }
+    
+    .zone-warm { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 92%; height: 82%; border-radius: 50% 50% 40% 40%; background: rgba(255, 224, 178, 0.5); border: 3px solid #ef6c00; z-index: 2; display: flex; flex-direction: column; align-items: center; padding-top: 30px; cursor: pointer; }
+    .zone-label-warm { font-weight: bold; color: #e65100; font-size: 16px; background: rgba(255,255,255,0.7); padding: 4px 12px; border-radius: 10px; margin-bottom: 10px; }
+    
+    .zone-hot { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 85%; height: 75%; border-radius: 50%; background: rgba(255, 205, 210, 0.6); border: 4px solid #c62828; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; }
+    .zone-label-hot { font-weight: bold; color: #b71c1c; font-size: 18px; background: rgba(255,255,255,0.8); padding: 5px 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #c62828; }
+    
+    .badge-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; width: 90%; min-height: 25px; margin-bottom: 5px; pointer-events: none; }
+    .zone-active-border { box-shadow: 0 0 0 5px #007bff !important; }
+    
+    .hazmat-stats-panel { background: white; border: 2px solid #a00; border-radius: 8px; padding: 10px; width: 260px; pointer-events: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.4); display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .hz-row { display: flex; justify-content: center; align-items: center; gap: 8px; }
+    .hz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+    .hz-box { text-align: center; }
+    .hz-lbl { font-size: 11px; font-weight: bold; display: block; margin-bottom: 2px; }
+    .hz-inp { width: 100%; text-align: center; font-weight: bold; border: 1px solid #ccc; border-radius: 4px; font-size: 18px; padding: 5px 0; }
+    
+    .badge { display: inline-block; padding: 6px 10px; border-radius: 4px; font-size: 12px; font-weight: bold; color: white; margin: 3px; cursor: pointer; border: 1px solid rgba(0,0,0,0.3); pointer-events: auto; box-shadow: 0 2px 2px rgba(0,0,0,0.3); }
+    .badge.selected { border: 2px solid black; transform: scale(1.2); z-index: 100; box-shadow: 0 0 8px black; }
+    .badge.badge-alarm { background-color: red !important; border-color: yellow !important; animation: pulse-red 1s infinite !important; box-shadow: 0 0 15px red; z-index: 200; }
+    
+    .group-card { background: white; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 10px; padding: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); position: relative; overflow: hidden; }
+    .group-card.selected { border: 4px solid var(--blue); background: #f0f8ff; }
+    .group-card.card-alarm { border: 4px solid red !important; background: #ffebee !important; animation: pulse-red 1s infinite !important; z-index: 100; box-shadow: 0 0 15px rgba(255,0,0,0.5) !important; }
+    @keyframes pulse-red { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); } 50% { transform: scale(1.05); background-color: red; box-shadow: 0 0 20px red; } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); } }
+    
+    .card-color-strip { position: absolute; top:0; left:0; bottom:0; width: 10px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-left: 18px; }
+    .card-timer { font-family: monospace; font-size: 20px; font-weight: bold; background: #eee; padding: 4px 8px; border-radius: 4px; min-width: 70px; text-align: center; }
+    .card-timer.running { background: #c8e6c9; color: #006400; border: 1px solid green; }
+    .card-controls { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 5px; align-items: center; padding-left: 18px; }
+    .btn-ctrl { padding: 10px; border: none; border-radius: 4px; font-weight: bold; color: white; cursor: pointer; font-size: 13px; flex: 1; }
+    .btn-confirm { background: red; color: white; border: 2px solid yellow; animation: hardBlink 1s infinite; flex: 2; }
+    .mem-input { width: 60px; padding: 5px; text-align: center; font-weight: bold; font-size: 16px; border: 2px solid #aaa; border-radius: 4px; z-index: 50; position: relative; }
+    
+    .footer { position: fixed; bottom: 0; left: 0; width: 100%; background: #222; color: white; display: flex; justify-content: space-around; padding: 8px 0; border-top: 4px solid var(--primary); font-size: 11px; z-index: 2000; }
+    .f-val { font-size: 16px; font-weight: bold; display: block; }
+    .ver { position: absolute; right: 2px; bottom: 2px; font-size: 9px; color: #555; }
+
+    .modal-wrap { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 6000; display: none; align-items: center; justify-content: center; }
+    .modal-box { background: white; width: 90%; max-width: 400px; padding: 25px; border-radius: 8px; text-align: center; border: 5px solid #333; }
+    .modal-btn { width: 100%; padding: 15px; margin-top: 10px; border: none; font-weight: bold; color: white; border-radius: 5px; cursor: pointer; font-size: 16px; }
+    .btn-hazmat-type { width: 100%; padding: 15px; margin-bottom: 10px; background: #444; color: white; border: 1px solid black; font-weight: bold; font-size: 16px; cursor: pointer; border-radius: 5px; }
+    .btn-overview { position: fixed; bottom: 80px; right: 20px; z-index: 4000; background: rgba(0,0,0,0.8); color: white; border: 2px solid white; padding: 10px 15px; border-radius: 30px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    @media print { .setup-screen, .tabs, .footer, .btn-ctrl, .base-station, button, .modal-wrap, .btn-overview, .sys-status, .hazmat-stats-panel { display: none !important; } body { height: auto; overflow: visible; background: white; padding: 0; margin: 0; } .tab-content { display: none !important; } #final-report { display: block !important; font-family: sans-serif; padding: 20px; } .rep-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 12px; } .rep-table th, .rep-table td { border: 1px solid black; padding: 5px; text-align: center; } }
+    #final-report { display: none; }
+</style>
+</head>
+<body>
+
+<div id="setupScreen" class="setup-screen">
+    <h1 style="color:red; font-size:2.5rem;">NEBEZPEČNÁ LÁTKA</h1>
+    <div class="setup-group">
+        <div class="chk-line" style="background:#fff3cd; border:1px solid orange;">
+            <input type="checkbox" id="chkTestMode" style="width:25px;height:25px;margin-right:10px;">
+            <label style="font-size:18px;">⚡ RÝCHLY TEST (15s)</label>
+        </div>
+    </div>
+    <button class="btn-big btn-green" onclick="appInit()">NOVÝ ZÁSAH (ŠTART)</button>
+    <button class="btn-big" style="background:#555; margin-top:20px; font-size:14px;" onclick="forceReset()">VYMAZAŤ ULOŽENÉ DÁTA</button>
+</div>
+
+<div class="tabs">
+    <div class="tab active" onclick="switchTab('map')">MAPA</div>
+    <div class="tab" onclick="switchTab('forces')">SILY (ADP)</div>
+    <div class="tab" onclick="switchTab('log')">DENNÍK</div>
+    <div id="sysIndicator" class="sys-status"></div>
+</div>
+
+<div id="viewMap" class="tab-content active">
+    <button class="btn-overview" onclick="toggleOverview()">👁️ CELÝ POHĽAD</button>
+    <div id="mapRenderArea" class="table-wrapper">
+        <div id="mapScaleWrapper">
+            <div class="zone-cold-container" id="zone_COLD" onclick="logicHandleRoomClick('COLD')">
+                <div class="zone-label-cold">BEZPEČNÁ OBLASŤ (COLD)</div>
+                <div class="base-station" id="zone_SAFE" onclick="event.stopPropagation(); logicHandleRoomClick('SAFE')">
+                    <div class="base-title">NÁSTUPNÝ PRIESTOR</div>
+                    <div id="badges_SAFE" class="badge-container"></div>
+                </div>
+                <div id="badges_COLD" class="badge-container" style="position:absolute; bottom:20px; width:100%;"></div>
+                <div id="zone_WARM" class="zone-warm" onclick="event.stopPropagation(); logicHandleRoomClick('WARM')">
+                    <div class="zone-label-warm">OCHRANNÉ PÁSMO (WARM)</div>
+                    <div id="badges_WARM" class="badge-container"></div>
+                    <div id="zone_HOT" class="zone-hot" onclick="event.stopPropagation(); logicHandleRoomClick('HOT')">
+                        <div class="zone-label-hot">PRIAME OHROZENIE (HOT)</div>
+                        <div id="badges_HOT" class="badge-container"></div>
+                        <div class="hazmat-stats-panel" onclick="event.stopPropagation()">
+                            <div class="hz-row">
+                                <input type="checkbox" style="width:25px;height:25px;" id="inp_s" onchange="dbUpdateRoom('HOT','s',this.checked)"> 
+                                <span style="font-weight:bold; font-size:16px;">PREHĽADANÉ</span>
+                            </div>
+                            <div class="hz-grid">
+                                <div class="hz-box"><span class="hz-lbl">OSOBY</span><input type="number" class="hz-inp" id="inp_p" value="0" onclick="this.select()" onchange="dbUpdateRoom('HOT','p',this.value)"></div>
+                                <div class="hz-box"><span class="hz-lbl" style="color:red">ZRANENÍ</span><input type="number" class="hz-inp" id="inp_i" style="color:red" value="0" onclick="this.select()" onchange="dbUpdateRoom('HOT','i',this.value)"></div>
+                                <div class="hz-box"><span class="hz-lbl" style="background:black;color:white">EXITUS</span><input type="number" class="hz-inp" id="inp_d" style="background:black;color:white" value="0" onclick="this.select()" onchange="dbUpdateRoom('HOT','d',this.value)"></div>
+                                <div class="hz-box"><span class="hz-lbl" style="color:green">EVAKUOVANÍ</span><input type="number" class="hz-inp" id="inp_e" style="color:green" value="0" onclick="this.select()" onchange="dbUpdateRoom('HOT','e',this.value)"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="viewForces" class="tab-content">
+    <div style="padding:10px; padding-bottom: 120px;">
+        <button class="btn-big" style="background:#333; margin-bottom:15px;" onclick="promptAddForce()">+ PRIDAŤ SKUPINU</button>
+        <div id="forcesList"></div>
+    </div>
+</div>
+
+<div id="viewLog" class="tab-content" style="padding:10px;">
+    <button class="btn-big" style="background:var(--primary); margin-bottom:20px; border:2px solid black;" onclick="finishIncident()">🏁 UKONČIŤ A TLAČIŤ</button>
+    <button class="btn-big" style="background:#555; margin-bottom:20px;" onclick="forceReset()">🗑️ VYMAZAŤ DÁTA</button>
+    <div id="logContent" style="font-family:monospace; font-size:12px;"></div>
+</div>
+
+<div class="footer">
+    <div>NASADENÍ<br><span id="statPers" class="f-val">0</span></div>
+    <div style="color:#ff5252">ZRAN.<br><span id="statInj" class="f-val">0</span></div>
+    <div style="color:#aaa">EXIT.<br><span id="statDead" class="f-val">0</span></div>
+    <div style="color:#69f0ae">EVAK.<br><span id="statEvac" class="f-val">0</span></div>
+    <div class="ver" style="position:absolute;right:2px;bottom:2px;font-size:9px;color:#555">v5.0</div>
+</div>
+
+<div id="modalHazmatType" class="modal-wrap">
+    <div class="modal-box">
+        <h3 style="margin-top:0;">Vyber typ skupiny</h3>
+        <button class="btn-hazmat-type" onclick="createHazmatGroup('Prieskumná')">Prieskumná</button>
+        <button class="btn-hazmat-type" onclick="createHazmatGroup('Zásahová')">Zásahová</button>
+        <button class="btn-hazmat-type" onclick="createHazmatGroup('Dekonta')">Dekonta</button>
+        <button class="btn-hazmat-type" onclick="createHazmatGroup('Záloha')">Záloha</button>
+        <button class="btn-hazmat-type" onclick="createHazmatGroup('Veliteľský bod')">Veliteľský bod</button>
+        <button class="modal-btn" style="background:#777" onclick="document.getElementById('modalHazmatType').style.display='none'">Zrušiť</button>
+    </div>
+</div>
+
+<div id="modalGroup" class="modal-wrap">
+    <div class="modal-box">
+        <h2 id="mTitle">...</h2>
+        <p id="mInfo">...</p>
+        <div id="mAlarm" style="display:none; background:red; color:white; padding:10px; margin-bottom:10px; font-weight:bold;">🚨 POPLACH!</div>
+        <button id="mBtnCheck" class="btn-big" style="background:orange; color:black; display:none;" onclick="confirmCheck()">POTVRDIŤ KONTROLU</button>
+        <button class="btn-big" style="background:#007bff; margin-top:5px;" onclick="moveGroupFromModal()">PRESUNÚŤ</button>
+        <button class="btn-big" style="background:orange; color:black" onclick="resetAir()">NOVÝ VZDUCH</button>
+        <button class="btn-big" style="background:#d32f2f; margin-top:5px;" onclick="removeForce()">UKONČIŤ ČINNOSŤ</button>
+        <button class="btn-big" style="background:#777; margin-top:15px;" onclick="document.getElementById('modalGroup').style.display='none'">ZAVRIEŤ</button>
+    </div>
+</div>
+
+<div id="final-report">
+    <h1>ZÁVEREČNÁ SPRÁVA O ZÁSAHU</h1>
+    <p><strong>Typ:</strong> Nebezpečná látka | <strong>Dátum:</strong> <span id="repDate"></span></p>
+    
+    <h3>1. Štatistika</h3>
+    <table class="rep-table" style="width:100%">
+        <tr><th>Prehľadané (HOT)</th><th>Osoby</th><th>Zranení</th><th>Exitus</th><th>Evakuovaní</th></tr>
+        <tr>
+            <td id="repSearch">-</td>
+            <td id="repPersR">0</td>
+            <td id="repInjR">0</td>
+            <td id="repDeadR">0</td>
+            <td id="repEvacR">0</td>
+        </tr>
+    </table>
+
+    <h3>2. Detail Zón</h3>
+    <table class="rep-table" style="width:100%">
+        <thead><tr><th>Zóna</th><th>Skupiny (v zóne)</th><th>Štatistika</th></tr></thead>
+        <tbody id="repZonesTable"></tbody>
+    </table>
+
+    <h3>3. Nasadené sily</h3>
+    <p><strong>Celkový počet nasadených hasičov:</strong> <span id="repTotalMem" style="font-weight:bold">0</span></p>
+    <table class="rep-table" style="width:100%">
+        <thead><tr><th>Skupina</th><th>Členov</th><th>Poloha</th><th>Stav</th></tr></thead>
+        <tbody id="repGroupTable"></tbody>
+    </table>
+
+    <h3>4. Denník</h3>
+    <div id="repLog" style="font-family:monospace; font-size:11px; white-space: pre-wrap;"></div>
+</div>
+
+<script>
+    const COLORS = [{bg:'#007bff',txt:'white'},{bg:'#ffd700',txt:'black'},{bg:'#28a745',txt:'white'},{bg:'#dc3545',txt:'white'},{bg:'#17a2b8',txt:'black'},{bg:'#6f42c1',txt:'white'},{bg:'#fd7e14',txt:'black'},{bg:'#e83e8c',txt:'white'},{bg:'#8B4513',txt:'white'},{bg:'#000000',txt:'white'}];
+    
+    // UNIKÁTNY KĽÚČ PRE HAZMAT
+    const STORAGE_KEY = 'DATA_HAZMAT_FINAL_V5';
+
+    let APP = { 
+        rooms: {}, groups:[], selectedGroupId:null, 
+        intervals:[900, 1200, 1500], 
+        logs:[], audioCtx:null, overviewMode:false,
+        lastId: 0,
+        isRunning: false
+    };
+
+    function saveData() { if(APP.isRunning) localStorage.setItem(STORAGE_KEY, JSON.stringify(APP)); }
+    function loadData() {
+        const data = localStorage.getItem(STORAGE_KEY);
+        if(data) { try { APP = { ...APP, ...JSON.parse(data) }; APP.audioCtx = null; return true; } catch(e) { return false; } }
+        return false;
+    }
+    function forceReset() { if(confirm("Naozaj vymazať všetky dáta a začať odznova?")) { localStorage.removeItem(STORAGE_KEY); location.reload(); } }
+
+    function initAudio() { try { if(!APP.audioCtx) APP.audioCtx = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){} }
+    function playAlarmBeep(lvl){ 
+        if(!APP.audioCtx)return; if(APP.audioCtx.state==='suspended')APP.audioCtx.resume(); 
+        const o=APP.audioCtx.createOscillator(); const g=APP.audioCtx.createGain(); 
+        o.frequency.value=800 + (lvl*100); o.connect(g); g.connect(APP.audioCtx.destination); 
+        o.start(); o.stop(APP.audioCtx.currentTime+0.5); 
+    }
+
+    window.onload = function() {
+        if(loadData() && APP.isRunning) {
+            document.getElementById('setupScreen').style.display='none';
+            initAudio();
+            setInterval(coreGameLoop, 1000);
+            renderMapBadgesOnly(); renderGroupList(); restoreInputs();
+            document.getElementById('sysIndicator').classList.add('sys-running');
+            dbLog("--- OBNOVENIE RELÁCIE PO REŠTARTE ---");
+        }
+    };
+
+    function appInit() {
+        initAudio();
+        if(document.getElementById('chkTestMode').checked) APP.intervals = [15,30,45];
+        if(!APP.rooms['HOT']) ['HOT','WARM','COLD'].forEach(z => APP.rooms[z] = {s:false, p:0, i:0, d:0, e:0});
+        APP.isRunning = true;
+        document.getElementById('setupScreen').style.display='none';
+        setInterval(coreGameLoop, 1000);
+        document.getElementById('sysIndicator').classList.add('sys-running');
+        dbLog("Štart systému: Nebezpečná látka");
+        saveData();
+    }
+
+    function restoreInputs() {
+        let r = APP.rooms['HOT'];
+        if(r) {
+            if(document.getElementById('inp_s')) document.getElementById('inp_s').checked = r.s;
+            if(document.getElementById('inp_p')) document.getElementById('inp_p').value = r.p;
+            if(document.getElementById('inp_i')) document.getElementById('inp_i').value = r.i;
+            if(document.getElementById('inp_d')) document.getElementById('inp_d').value = r.d;
+            if(document.getElementById('inp_e')) document.getElementById('inp_e').value = r.e;
+        }
+        dbCalcTotals();
+    }
+
+    function renderMapBadgesOnly() {
+        ['HOT','WARM','COLD','SAFE'].forEach(z => document.getElementById(`badges_${z}`).innerHTML = "");
+        APP.groups.forEach(g => {
+            if(g.status === 'finished') return;
+            let isAlarm = (g.alarmLevel > g.ackLevel);
+            let alarmClass = isAlarm ? 'badge-alarm' : '';
+            let b = document.createElement('div');
+            b.className = `badge ${APP.selectedGroupId===g.id?'selected':''} ${alarmClass}`;
+            b.style.backgroundColor = g.colorObj.bg; b.style.color = g.colorObj.txt;
+            b.innerText = g.name;
+            b.onclick = (e) => { e.stopPropagation(); logicBadgeClick(g.id); };
+            let container = document.getElementById(`badges_${g.loc}`);
+            if(container) container.appendChild(b);
+        });
+        ['HOT','WARM','COLD','SAFE'].forEach(z => {
+            let el = document.getElementById(`zone_${z}`);
+            if(el) el.classList.remove('zone-active-border');
+        });
+        if(APP.selectedGroupId) {
+            let g = APP.groups.find(x => x.id === APP.selectedGroupId);
+            if(g) {
+                let z = document.getElementById(`zone_${g.loc}`);
+                if(z) z.classList.add('zone-active-border');
+            }
+        }
+    }
+
+    function renderGroupList() {
+        const area = document.getElementById('forcesList'); area.innerHTML = "";
+        APP.groups.forEach(g => {
+            if(g.status === 'finished') return;
+            let alarmClass = (g.alarmLevel > g.ackLevel) ? 'card-alarm' : '';
+            let div = document.createElement('div');
+            div.className = `group-card ${APP.selectedGroupId===g.id?'selected':''} ${alarmClass}`;
+            div.onclick = () => logicSelectGroup(g.id);
+            let tmClass = g.status === 'running' ? 'card-timer running' : 'card-timer';
+            div.innerHTML = `<div class="card-color-strip" style="background:${g.colorObj.bg}"></div>
+                <div class="card-header"><div><b>${g.name}</b> <small>(${g.loc})</small></div><div class="${tmClass}" id="tm_${g.id}">${utilFormatTime(g.elapsed)}</div></div>
+                <div style="font-size:14px; margin-bottom:10px; padding-left:18px; display:flex; align-items:center;">
+                    Počet hasičov: <input type="number" class="mem-input" value="${g.members}" onclick="event.stopPropagation(); this.select();" oninput="dbUpdateMember(${g.id}, this.value)">
+                </div>
+                <div class="card-controls">
+                    ${(g.alarmLevel>g.ackLevel) ? `<button class="btn-ctrl btn-confirm" onclick="event.stopPropagation();logicOpenGroupModal(${g.id})">ALARM!</button>` : ''}
+                    ${g.status==='idle' ? `<button class="btn-ctrl" style="background:green" onclick="event.stopPropagation();logicTimerStart(${g.id})">ŠTART</button>` : `<button class="btn-ctrl" style="background:red" onclick="event.stopPropagation();logicTimerStop(${g.id})">STOP</button>`}
+                    <button class="btn-ctrl" style="background:#333" onclick="event.stopPropagation();logicOpenGroupModal(${g.id})">INFO</button>
+                </div>`;
+            area.appendChild(div);
+        });
+    }
+
+    function promptAddForce() { document.getElementById('modalHazmatType').style.display = 'flex'; }
+    function createHazmatGroup(prefix) {
+        document.getElementById('modalHazmatType').style.display = 'none';
+        APP.lastId++; let id = APP.lastId;
+        let count = APP.groups.filter(g => g.name.startsWith(prefix)).length + 1;
+        let displayName = `${prefix} ${count}`;
+        APP.groups.push({id:id, name:displayName, loc:'SAFE', status:'idle', elapsed:0, alarmLevel:0, ackLevel:0, members:2, colorObj:COLORS[(id-1)%COLORS.length]});
+        logicSelectGroup(id); renderMapBadgesOnly(); renderGroupList(); dbLog(`Vytvorená: ${displayName}`); saveData();
+    }
+    function logicSelectGroup(id) { APP.selectedGroupId = (APP.selectedGroupId===id) ? null : id; renderGroupList(); renderMapBadgesOnly(); }
+    function logicHandleRoomClick(loc) {
+        if(APP.selectedGroupId) {
+            let g = APP.groups.find(x=>x.id===APP.selectedGroupId);
+            if(g) { let old = g.loc; g.loc = loc; APP.selectedGroupId=null; dbLog(`${g.name}: Presun ${old} -> ${loc}`); renderMapBadgesOnly(); renderGroupList(); saveData(); }
+        }
+    }
+    function coreGameLoop() {
+        let redraw = false;
+        APP.groups.forEach(g => {
+            if(g.status === 'running') {
+                g.elapsed++;
+                let el = document.getElementById(`tm_${g.id}`); if(el) el.innerText = utilFormatTime(g.elapsed);
+                if(g.elapsed >= APP.intervals[0] && g.alarmLevel === 0) { g.alarmLevel = 1; redraw = true; playAlarmBeep(1); }
+                if(g.elapsed >= APP.intervals[1] && g.alarmLevel === 1) { g.alarmLevel = 2; redraw = true; playAlarmBeep(2); }
+                if(g.elapsed >= APP.intervals[2] && g.alarmLevel === 2) { g.alarmLevel = 3; redraw = true; playAlarmBeep(3); }
+            }
+        });
+        if(redraw) { renderGroupList(); renderMapBadgesOnly(); }
+        if(Date.now() % 5000 < 100) saveData();
+    }
+    function dbUpdateRoom(id, f, v) { 
+        if(f!=='s') v=parseInt(v)||0;
+        let old = APP.rooms[id][f]; APP.rooms[id][f] = v; 
+        if(f==='s' && v===true && old===false) dbLog(`${id} ZÓNA: PREHĽADANÉ`);
+        if(f==='p' && v > old) dbLog(`${id} ZÓNA: Nájdená OSOBA (Spolu: ${v})`);
+        dbCalcTotals(); saveData();
+    }
+    function dbUpdateMember(id, v) { APP.groups.find(x=>x.id===id).members = parseInt(v)||0; updateFooterStats(); saveData(); }
+    function updateFooterStats() {
+        let activeMem = 0; APP.groups.forEach(g => { if(g.status !== 'finished') activeMem += parseInt(g.members)||0; });
+        document.getElementById('statPers').innerText = activeMem;
+    }
+    function dbCalcTotals() {
+        let r = APP.rooms['HOT'] || {p:0, i:0, d:0, e:0};
+        document.getElementById('statInj').innerText=r.i; document.getElementById('statDead').innerText=r.d; document.getElementById('statEvac').innerText=r.e;
+        return r; 
+    }
+    let _modId = null;
+    function logicBadgeClick(id) { let g=APP.groups.find(x=>x.id===id); if(g.alarmLevel>g.ackLevel) logicOpenGroupModal(id); else logicSelectGroup(id); }
+    function logicOpenGroupModal(id) { _modId=id; let g=APP.groups.find(x=>x.id===id); document.getElementById('mTitle').innerText=g.name; document.getElementById('mInfo').innerText=`Poloha: ${g.loc} | Čas: ${utilFormatTime(g.elapsed)}`; let alert=document.getElementById('mAlarm'); let btn=document.getElementById('mBtnCheck'); if(g.alarmLevel>g.ackLevel){alert.style.display='block';btn.style.display='block';}else{alert.style.display='none';btn.style.display='none';} document.getElementById('modalGroup').style.display='flex'; }
+    function confirmCheck() { let g=APP.groups.find(x=>x.id===_modId); g.ackLevel=g.alarmLevel; uiCloseModal(); renderGroupList(); renderMapBadgesOnly(); saveData(); }
+    function moveGroupFromModal() { APP.selectedGroupId = _modId; uiCloseModal(); switchTab('map'); }
+    function resetAir() { if(confirm("Vymeniť fľaše?")) { let g=APP.groups.find(x=>x.id===_modId); g.elapsed=0; g.alarmLevel=0; g.ackLevel=0; uiCloseModal(); renderGroupList(); renderMapBadgesOnly(); saveData(); } }
+    function removeForce() { if(confirm("Ukončiť?")) { APP.groups.find(x=>x.id===_modId).status='finished'; uiCloseModal(); renderGroupList(); renderMapBadgesOnly(); saveData(); } }
+    function logicTimerStart(id){ APP.groups.find(x=>x.id===id).status='running'; renderGroupList(); saveData(); }
+    function logicTimerStop(id){ APP.groups.find(x=>x.id===id).status='idle'; renderGroupList(); saveData(); }
+    function switchTab(t) { document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('active')); if(t==='map'){document.querySelectorAll('.tab')[0].classList.add('active');document.getElementById('viewMap').classList.add('active');} if(t==='forces'){document.querySelectorAll('.tab')[1].classList.add('active');document.getElementById('viewForces').classList.add('active');} if(t==='log'){document.querySelectorAll('.tab')[2].classList.add('active');document.getElementById('viewLog').classList.add('active');} }
+    function uiCloseModal() { document.getElementById('modalGroup').style.display='none'; }
+    function toggleOverview() { APP.overviewMode=!APP.overviewMode; let w=document.getElementById('mapScaleWrapper'); if(APP.overviewMode){ let h=window.innerHeight-150; let s=Math.min(h/w.scrollHeight,1); w.style.width="100%"; w.style.transform=`scale(${s})`; w.style.width=`${100/s}%`; } else { w.style.transform="scale(1)"; w.style.width="100%"; } }
+    function dbLog(m) { let t=new Date().toLocaleTimeString(); APP.logs.push({t,m}); document.getElementById('logContent').innerHTML=`<div><b>${t}</b> ${m}</div>`+document.getElementById('logContent').innerHTML; saveData(); }
+    function utilFormatTime(s) { return new Date(s*1000).toISOString().substr(14,5); }
+    function finishIncident() { 
+        if(!confirm("Ukončiť zásah?"))return; 
+        document.getElementById('repDate').innerText=new Date().toLocaleString(); 
+        let stats = dbCalcTotals(); 
+        document.getElementById('repSearch').innerText=(stats.s ? 'ÁNO' : 'NIE'); 
+        document.getElementById('repPersR').innerText=stats.p; document.getElementById('repInjR').innerText=stats.i; document.getElementById('repDeadR').innerText=stats.d; document.getElementById('repEvacR').innerText=stats.e;
+        let t=""; let totalMem = 0;
+        APP.groups.forEach(g=>{ totalMem += parseInt(g.members)||0; t+=`<tr><td>${g.name}</td><td>${g.members}</td><td>${g.loc}</td><td>${g.status} (${utilFormatTime(g.elapsed)})</td></tr>`; }); 
+        document.getElementById('repGroupTable').innerHTML=t;
+        document.getElementById('repTotalMem').innerText = totalMem;
+        let zt = ""; ['HOT','WARM','COLD'].forEach(z => { let grps = APP.groups.filter(g => g.loc === z).map(g => g.name).join(', '); let st = ""; if(z==='HOT' && (stats.p>0 || stats.i>0 || stats.d>0)) { st = `(O:${stats.p}, Z:${stats.i}, E:${stats.d})`; } if(grps || st) zt += `<tr><td>${z}</td><td>${grps || '-'}</td><td>${st}</td></tr>`; });
+        document.getElementById('repZonesTable').innerHTML = zt || "<tr><td colspan='3'>Bez aktivity v zónach</td></tr>";
+        document.getElementById('repLog').innerText=APP.logs.map(l=>`[${l.t}] ${l.m}`).join('\n');
+        window.print(); 
+    }
+    setInterval(updateFooterStats, 2000);
+<script>
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./sw.js'); }
+</script>
+</body>
+</html>
