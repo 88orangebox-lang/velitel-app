@@ -128,7 +128,8 @@
 
     <div id="viewLog" class="tab-content">
         <div class="log-pad">
-            <button class="btn-big btn-primary" onclick="finishIncident()">🏁 UKONČIŤ ZÁSAH A VYTVORIŤ PDF</button>
+            <button id="btnFinish" class="btn-big btn-primary" onclick="finishIncident()">🏁 UKONČIŤ ZÁSAH A VYTVORIŤ PDF</button>
+            <button id="btnNew" class="btn-big btn-green" style="display:none" onclick="newIncident()">🆕 NOVÝ ZÁSAH</button>
             <div class="manual-log">
                 <input type="text" id="manualLogInput" placeholder="Poznámka do denníka…" onkeydown="if(event.key==='Enter')addManualLog()">
                 <button onclick="addManualLog()">ZAPÍSAŤ</button>

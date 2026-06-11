@@ -16,7 +16,8 @@
         .btn-sklad { background: #e65100; border-left: 10px solid #ff9800; }
         .btn-byty { background: #d32f2f; border-left: 10px solid #ff5252; }
         .btn-hazmat { background: #1b5e20; border-left: 10px solid #4caf50; }
-        .live { display: block; margin-top: 10px; font-size: 13px; color: #fff; background: rgba(0,0,0,0.45); border: 1px solid #69f0ae; color: #69f0ae; border-radius: 20px; padding: 5px 12px; width: fit-content; margin-left: auto; margin-right: auto; animation: blink 1.2s infinite; }
+        .live { display: block; margin-top: 10px; font-size: 13px; background: rgba(0,0,0,0.45); border: 1px solid #69f0ae; color: #69f0ae; border-radius: 20px; padding: 5px 12px; width: fit-content; margin-left: auto; margin-right: auto; animation: blink 1.2s infinite; }
+        .done { display: block; margin-top: 10px; font-size: 13px; background: rgba(0,0,0,0.45); border: 1px solid #bbb; color: #ccc; border-radius: 20px; padding: 5px 12px; width: fit-content; margin-left: auto; margin-right: auto; }
         @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.45; } 100% { opacity: 1; } }
         .ver { margin-top: 40px; font-size: 11px; color: #555; }
     </style>
@@ -32,14 +33,15 @@
     <div class="ver">v6.0</div>
 
     <script>
-        /* Indikácia rozbehnutého zásahu v jednotlivých moduloch */
+        /* Indikácia stavu zásahu v jednotlivých moduloch */
         document.querySelectorAll('.btn-app[data-key]').forEach(a => {
             try {
                 const d = JSON.parse(localStorage.getItem(a.dataset.key) || 'null');
                 if (d && d.isRunning) {
+                    const ended = !!(d.meta && d.meta.endTs);
                     const s = document.createElement('span');
-                    s.className = 'live';
-                    s.textContent = '● PREBIEHA ZÁSAH';
+                    s.className = ended ? 'done' : 'live';
+                    s.textContent = ended ? '✔ ZÁSAH UKONČENÝ — údaje v zariadení' : '● PREBIEHA ZÁSAH';
                     a.appendChild(s);
                 }
             } catch (e) {}

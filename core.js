@@ -95,7 +95,8 @@ function coreSetup(config) {
         renderLogAll();
         refreshAll();
         coreStartRuntime();
-        dbLog('— Obnovenie relácie —');
+        updateFinishUI();
+        if (!APP.meta.endTs) dbLog('— Obnovenie relácie —');
     }
 }
 
@@ -114,6 +115,7 @@ function coreStartIncident() {
     renderLogAll();
     refreshAll();
     coreStartRuntime();
+    updateFinishUI();
     dbLog('ŠTART ZÁSAHU: ' + CFG.typeLabel + (APP.meta.addr ? ' — ' + APP.meta.addr : ''));
     saveData();
 }
@@ -623,6 +625,12 @@ function hideToast() { document.getElementById('coreToast').style.display = 'non
 /* ===================== UKONČENIE A PDF PREHĽAD ===================== */
 
 function finishIncident() {
+    /* už ukončený zásah — len opätovná tlač PDF */
+    if (APP.meta.endTs) {
+        buildReport();
+        window.print();
+        return;
+    }
     if (!confirm('Ukončiť zásah a vytvoriť PDF prehľad? (zastaví všetky časovače ADP)')) return;
     APP.groups.forEach(g => {
         if (g.runningSince) {
@@ -631,11 +639,31 @@ function finishIncident() {
             dbLog(g.name + ': STOP časovača ADP — ukončenie zásahu (čas ' + fmtTime(g.elapsedAcc) + ')');
         }
     });
-    if (!APP.meta.endTs) { APP.meta.endTs = Date.now(); dbLog('UKONČENIE ZÁSAHU'); }
+    APP.meta.endTs = Date.now();
+    dbLog('UKONČENIE ZÁSAHU');
     refreshAll();
+    updateFinishUI();
     saveData();
     buildReport();
     window.print();
+}
+
+/* Po ukončení zásahu sa zmení tlačidlo tlače, objaví sa NOVÝ ZÁSAH
+ * a indikátor prestane pulzovať. */
+function updateFinishUI() {
+    const ended = !!(APP.meta && APP.meta.endTs);
+    const fin = document.getElementById('btnFinish');
+    if (fin) fin.innerText = ended ? '🖨 VYTLAČIŤ PDF ZNOVA' : '🏁 UKONČIŤ ZÁSAH A VYTVORIŤ PDF';
+    const nw = document.getElementById('btnNew');
+    if (nw) nw.style.display = ended ? 'block' : 'none';
+    const ind = document.getElementById('sysIndicator');
+    if (ind) ind.classList.toggle('sys-running', !!APP.isRunning && !ended);
+}
+
+function newIncident() {
+    if (!confirm('Začať nový zásah? Údaje ukončeného zásahu sa z tabletu vymažú — PDF alebo EXPORT si ulož vopred.')) return;
+    localStorage.removeItem(CFG.key);
+    location.reload();
 }
 
 function buildReport() {
