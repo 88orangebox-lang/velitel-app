@@ -17,7 +17,7 @@
  */
 'use strict';
 
-const APP_VERSION = '6.2';
+const APP_VERSION = '6.3';
 
 const COLORS =[{bg:'#007bff',txt:'white'},{bg:'#ffd700',txt:'black'},{bg:'#28a745',txt:'white'},{bg:'#dc3545',txt:'white'},{bg:'#17a2b8',txt:'black'},{bg:'#6f42c1',txt:'white'},{bg:'#fd7e14',txt:'black'},{bg:'#e83e8c',txt:'white'},{bg:'#8B4513',txt:'white'},{bg:'#000000',txt:'white'}];
 
@@ -34,6 +34,7 @@ let _toastTimer = null;
 let _activeTab = 'map';
 let _overview = false;
 let _secretTaps = 0;
+let _wiped = false; /* po vymazaní dát blokuje auto-ukladanie, aby ich nevzkriesilo */
 
 /* ===================== STAV A PERZISTENCIA ===================== */
 
@@ -46,7 +47,7 @@ function coreBaseState() {
     };
 }
 
-function saveData() { if (APP && APP.isRunning) { try { localStorage.setItem(CFG.key, JSON.stringify(APP)); } catch (e) {} } }
+function saveData() { if (!_wiped && APP && APP.isRunning) { try { localStorage.setItem(CFG.key, JSON.stringify(APP)); } catch (e) {} } }
 
 function coreLoadData() {
     const d = localStorage.getItem(CFG.key);
@@ -58,12 +59,21 @@ function coreLoadData() {
     } catch (e) { return false; }
 }
 
-function forceReset() {
-    if (!confirm('Naozaj vymazať všetky dáta tohto zásahu?')) return;
-    if (!confirm('Údaje sa NENÁVRATNE stratia (odporúčame najprv EXPORT/PDF). Pokračovať?')) return;
+/* Vymaže aktívny zásah a vráti appku na úvodné nastavenie.
+ * _wiped + isRunning=false zaručia, že auto-ukladanie (beforeunload,
+ * visibilitychange) dáta pri reštarte nezapíše späť. */
+function wipeActive() {
+    _wiped = true;
+    if (APP) APP.isRunning = false;
     localStorage.removeItem(CFG.key);
     (CFG.legacyKeys || []).forEach(k => localStorage.removeItem(k));
     location.reload();
+}
+
+function forceReset() {
+    if (!confirm('Naozaj vymazať všetky dáta tohto zásahu?')) return;
+    if (!confirm('Údaje sa NENÁVRATNE stratia — bez uloženia do archívu. Pokračovať?')) return;
+    wipeActive();
 }
 
 function exportJSON() {
@@ -81,6 +91,18 @@ function coreSetup(config) {
     CFG = config;
     APP = Object.assign(coreBaseState(), CFG.defaults || {});
     coreInjectChrome();
+    /* tlačidlo archívu na setup obrazovke (zobrazí sa, len ak archív nie je prázdny) */
+    const sc = document.querySelector('.setup-scroll');
+    if (sc) {
+        const b = document.createElement('button');
+        b.id = 'btnArchive';
+        b.className = 'btn-big';
+        b.style.background = '#555';
+        b.style.display = 'none';
+        b.onclick = archOpen;
+        sc.appendChild(b);
+        refreshArchBtn();
+    }
     coreApplyDark(localStorage.getItem('VELITEL_DARK') === '1');
     coreDualWatch();
     document.addEventListener('pointerdown', coreInitAudio);
@@ -672,9 +694,80 @@ function updateFinishUI() {
 }
 
 function newIncident() {
-    if (!confirm('Začať nový zásah? Údaje ukončeného zásahu sa z tabletu vymažú — PDF alebo EXPORT si ulož vopred.')) return;
-    localStorage.removeItem(CFG.key);
-    location.reload();
+    if (!confirm('Začať nový zásah? Ukončený zásah sa uloží do archívu (na úvodnej obrazovke).')) return;
+    archiveCurrent();
+    wipeActive();
+}
+
+/* ===================== ARCHÍV ZÁSAHOV ===================== */
+
+const ARCHIVE_KEY = 'VELITEL_ARCHIV_V1';
+const ARCHIVE_MAX = 20;
+
+function readArchive() {
+    try { return JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]'); } catch (e) { return []; }
+}
+function writeArchive(list) {
+    try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(list)); } catch (e) {}
+}
+function archEntries() { return readArchive().filter(e => e.page === CFG.key); }
+
+function archiveCurrent() {
+    if (!APP || !APP.isRunning) return;
+    const list = readArchive();
+    list.unshift({ page: CFG.key, type: CFG.typeLabel, ts: Date.now(), data: APP });
+    while (list.length > ARCHIVE_MAX) list.pop();
+    writeArchive(list);
+}
+
+function refreshArchBtn() {
+    const b = document.getElementById('btnArchive');
+    if (!b) return;
+    const n = archEntries().length;
+    b.innerText = '📁 ARCHÍV ZÁSAHOV (' + n + ')';
+    b.style.display = n ? 'block' : 'none';
+}
+
+function archOpen() {
+    const wrap = document.getElementById('archList');
+    const list = archEntries();
+    wrap.innerHTML = list.length ? '' : '<p>Archív je prázdny.</p>';
+    list.forEach(e => {
+        const m = (e.data && e.data.meta) || {};
+        const when = m.startTs ? new Date(m.startTs).toLocaleString('sk-SK') : new Date(e.ts).toLocaleString('sk-SK');
+        const div = document.createElement('div');
+        div.className = 'arch-item';
+        div.innerHTML = '<div class="arch-info"><b>' + esc(when) + '</b>' + (m.addr ? '<br>' + esc(m.addr) : '') + '</div>' +
+            '<div class="arch-actions">' +
+            '<button onclick="archPrint(' + e.ts + ')">🖨 PDF</button>' +
+            '<button class="arch-del" onclick="archDelete(' + e.ts + ')">🗑</button>' +
+            '</div>';
+        wrap.appendChild(div);
+    });
+    document.getElementById('modalArchive').style.display = 'flex';
+}
+
+function archClose() { document.getElementById('modalArchive').style.display = 'none'; }
+
+function archPrint(ts) {
+    const e = readArchive().find(x => x.ts === ts);
+    if (!e) return;
+    /* report sa skladá z globálneho APP — dočasne ho nahradíme archivovaným */
+    const keep = APP;
+    APP = Object.assign(coreBaseState(), CFG.defaults || {}, e.data);
+    try {
+        buildReport();
+        window.print();
+    } finally {
+        APP = keep;
+    }
+}
+
+function archDelete(ts) {
+    if (!confirm('Vymazať tento zásah z archívu?')) return;
+    writeArchive(readArchive().filter(x => x.ts !== ts));
+    refreshArchBtn();
+    archOpen();
 }
 
 function buildReport() {
@@ -718,6 +811,11 @@ function coreInjectChrome() {
             '<button class="btn-big" style="background:#f9a825;color:black" onclick="resetAir()">🔄 NOVÝ VZDUCH (výmena fliaš)</button>' +
             '<button class="btn-big" style="background:#d32f2f" onclick="removeForce()">🏁 UKONČIŤ ČINNOSŤ</button>' +
             '<button class="btn-big" style="background:#777" onclick="uiCloseModal()">ZAVRIEŤ</button>' +
+        '</div></div>' +
+        '<div id="modalArchive" class="modal-wrap"><div class="modal-box">' +
+            '<h2 style="margin-top:0">📁 Archív zásahov</h2>' +
+            '<div id="archList"></div>' +
+            '<button class="btn-big" style="background:#777" onclick="archClose()">ZAVRIEŤ</button>' +
         '</div></div>' +
         '<div id="final-report">' +
             '<h1>PREHĽAD O ZÁSAHU <small style="font-size:14px;font-weight:normal">(pomôcka veliteľa — nie je oficiálna správa)</small></h1>' +
