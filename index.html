@@ -7,26 +7,44 @@
     <link rel="manifest" href="manifest.json">
     <title>VELITEĽ Zásah</title>
     <style>
-        body { background: #222; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; user-select: none; }
-        h1 { margin-bottom: 40px; text-transform: uppercase; letter-spacing: 2px; text-align: center;}
+        body { background: #222; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; user-select: none; }
+        h1 { margin-bottom: 10px; text-transform: uppercase; letter-spacing: 2px; text-align: center; }
+        .sub { color: #999; font-size: 14px; margin: 0 20px 35px; text-align: center; }
         .menu-grid { display: flex; flex-direction: column; gap: 25px; width: 90%; max-width: 400px; }
-        .btn-app { padding: 30px; font-size: 22px; font-weight: bold; color: white; border: none; border-radius: 15px; cursor: pointer; text-decoration: none; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); transition: transform 0.1s; display: block; }
+        .btn-app { padding: 30px; font-size: 22px; font-weight: bold; color: white; border: none; border-radius: 15px; cursor: pointer; text-decoration: none; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); transition: transform 0.1s; display: block; position: relative; }
         .btn-app:active { transform: scale(0.96); }
-        
         .btn-sklad { background: #e65100; border-left: 10px solid #ff9800; }
         .btn-byty { background: #d32f2f; border-left: 10px solid #ff5252; }
         .btn-hazmat { background: #1b5e20; border-left: 10px solid #4caf50; }
+        .live { display: block; margin-top: 10px; font-size: 13px; color: #fff; background: rgba(0,0,0,0.45); border: 1px solid #69f0ae; color: #69f0ae; border-radius: 20px; padding: 5px 12px; width: fit-content; margin-left: auto; margin-right: auto; animation: blink 1.2s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.45; } 100% { opacity: 1; } }
+        .ver { margin-top: 40px; font-size: 11px; color: #555; }
     </style>
 </head>
 <body>
     <h1>Veliteľ Zásahu</h1>
+    <p class="sub">Pomôcka veliteľa zásahu — všetky údaje zostávajú len v tomto zariadení.</p>
     <div class="menu-grid">
-        <a href="sklad.html" class="btn-app btn-sklad">🏭 SKLAD / HALA</a>
-        <a href="byty.html" class="btn-app btn-byty">🏢 BYTOVÝ DOM</a>
-        <a href="hazmat.html" class="btn-app btn-hazmat">☣️ NEBEZPEČNÁ LÁTKA</a>
+        <a href="sklad.html" class="btn-app btn-sklad" data-key="VELITEL_SKLAD_V11">🏭 SKLAD / HALA</a>
+        <a href="byty.html" class="btn-app btn-byty" data-key="VELITEL_BYTY_V6">🏢 BYTOVÝ DOM</a>
+        <a href="hazmat.html" class="btn-app btn-hazmat" data-key="VELITEL_HAZMAT_V6">☣️ NEBEZPEČNÁ LÁTKA</a>
     </div>
+    <div class="ver">v6.0</div>
 
     <script>
+        /* Indikácia rozbehnutého zásahu v jednotlivých moduloch */
+        document.querySelectorAll('.btn-app[data-key]').forEach(a => {
+            try {
+                const d = JSON.parse(localStorage.getItem(a.dataset.key) || 'null');
+                if (d && d.isRunning) {
+                    const s = document.createElement('span');
+                    s.className = 'live';
+                    s.textContent = '● PREBIEHA ZÁSAH';
+                    a.appendChild(s);
+                }
+            } catch (e) {}
+        });
+
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js');
         }
