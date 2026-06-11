@@ -17,7 +17,9 @@
  */
 'use strict';
 
-const COLORS = [{bg:'#007bff',txt:'white'},{bg:'#ffd700',txt:'black'},{bg:'#28a745',txt:'white'},{bg:'#dc3545',txt:'white'},{bg:'#17a2b8',txt:'black'},{bg:'#6f42c1',txt:'white'},{bg:'#fd7e14',txt:'black'},{bg:'#e83e8c',txt:'white'},{bg:'#8B4513',txt:'white'},{bg:'#000000',txt:'white'}];
+const APP_VERSION = '6.2';
+
+const COLORS =[{bg:'#007bff',txt:'white'},{bg:'#ffd700',txt:'black'},{bg:'#28a745',txt:'white'},{bg:'#dc3545',txt:'white'},{bg:'#17a2b8',txt:'black'},{bg:'#6f42c1',txt:'white'},{bg:'#fd7e14',txt:'black'},{bg:'#e83e8c',txt:'white'},{bg:'#8B4513',txt:'white'},{bg:'#000000',txt:'white'}];
 
 let CFG = null;
 let APP = null;
@@ -87,7 +89,16 @@ function coreSetup(config) {
         if (document.visibilityState === 'hidden') { try { saveData(); } catch (e) {} }
         else if (APP && APP.isRunning) { coreWakeLock(); refreshAll(); }
     });
-    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./sw.js'); }
+    document.querySelectorAll('.ver').forEach(el => el.innerText = 'v' + APP_VERSION);
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js');
+        /* nová verzia prevzala kontrolu — ponúkni obnovenie */
+        let hadController = !!navigator.serviceWorker.controller;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (hadController) showToast('Aplikácia bola aktualizovaná na novú verziu.', 'OBNOVIŤ', () => location.reload());
+            hadController = true;
+        });
+    }
 
     if (coreLoadData() && APP.isRunning) {
         document.getElementById('setupScreen').style.display = 'none';

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'velitel-v6.1';
+const CACHE_NAME = 'velitel-v6.2';
 const ASSETS = [
   './',
   './index.html',
@@ -15,7 +15,8 @@ const ASSETS = [
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(ASSETS))
+      // cache:'reload' obíde HTTP cache — do novej cache idú vždy čerstvé súbory
+      .then((cache) => cache.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
       .then(() => self.skipWaiting())
   );
 });

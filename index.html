@@ -30,7 +30,7 @@
         <a href="byty.html" class="btn-app btn-byty" data-key="VELITEL_BYTY_V6">🏢 BYTOVÝ DOM</a>
         <a href="hazmat.html" class="btn-app btn-hazmat" data-key="VELITEL_HAZMAT_V6">☣️ NEBEZPEČNÁ LÁTKA</a>
     </div>
-    <div class="ver">v6.0</div>
+    <div class="ver">v6.2</div>
 
     <script>
         /* Indikácia stavu zásahu v jednotlivých moduloch */
@@ -49,6 +49,12 @@
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js');
+            /* úvodná obrazovka nemá rozrobený stav — po aktualizácii sa obnoví sama */
+            let hadController = !!navigator.serviceWorker.controller;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (hadController) location.reload();
+                hadController = true;
+            });
         }
     </script>
 </body>
